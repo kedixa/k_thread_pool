@@ -1,6 +1,6 @@
 /*
-    author: kedixa
-    e-mail: 1204837541@qq.com
+    Author: kedixa
+    E-mail: 1204837541@qq.com
     License: GPL2
 */
 
@@ -21,7 +21,7 @@ public:
     k_queue(int max_size = std::numeric_limits<size_t>::max())
         : max_size(max_size) {}
     k_queue(k_queue<T>&) = delete;
-    k_queue operator=(k_queue<T>&) = delete;
+    k_queue operator= (k_queue<T>&) = delete;
 
     std::pair<bool, T> pop()
     {
