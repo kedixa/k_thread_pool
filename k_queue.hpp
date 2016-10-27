@@ -32,28 +32,28 @@ public:
     k_queue(k_queue<T>&) = delete;
     k_queue operator= (k_queue<T>&) = delete;
 
-    std::pair<bool, T> pop(milli_seconds milli = milli_seconds(0))
+    std::shared_ptr<T> pop(milli_seconds milli = milli_seconds(0))
     {
         u_lock lk(mtx);
-        std::pair<bool, T> result = std::make_pair(false, T());
+        auto result = std::shared_ptr<T>(nullptr);
         if(cv_not_empty.wait_for(lk, milli, [&](){return stop_flag || !que.empty();}))
         {
             if(stop_flag) return result; // stop
             assert(!que.empty()); // DEBUG
-            result = std::make_pair(true, std::move(que.front()));
+            result = std::make_shared<T>(std::move(que.front()));
             que.pop();
             if(que.size() != max_size)
                 cv_not_full.notify_one();
         }
         return result;
     }
-    T pop_block()
+    std::shared_ptr<T> pop_block()
     {
         u_lock lk(mtx);
         cv_not_empty.wait(lk, [&](){return stop_flag || !que.empty();});
-        if(stop_flag) return T(); // the function requires a return value, but wrong
+        if(stop_flag) return std::shared_ptr<T>(nullptr);
         assert(!que.empty()); // DEBUG
-        auto result = std::move(que.front());
+        auto result = std::make_shared<T>(std::move(que.front()));
         que.pop();
         if(que.size() != max_size)
             cv_not_full.notify_one();
@@ -76,6 +76,15 @@ public:
         }
         else return false;
     }
+    void stop()
+    {
+        {
+            u_lock lk(mtx);
+            stop_flag = true;
+        }
+        cv_not_empty.notify_all();
+        cv_not_full.notify_all();
+    }
     bool empty()
     {
         return que.empty();
@@ -89,5 +98,7 @@ public:
         return que.size();
     }
     ~k_queue()
-    {}
+    {
+        stop();
+    }
 };

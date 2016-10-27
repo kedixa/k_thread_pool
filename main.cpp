@@ -8,7 +8,7 @@ class cc
     public:
     cc(){}
 };
-k_queue<cc> que(1);
+k_queue<cc> que(3);
 const int sz = 10;
 
 int main()
@@ -17,7 +17,7 @@ int main()
         for(int i = 0; i < sz; i++)
         {
             auto t = que.pop(chrono::milliseconds(0));
-            if(t.first) cout<<"thread 1 pop: "<<endl;
+            if(t) cout<<"thread 1 pop: "<<endl;
             else 
             {
                 cout<<"wait"<<endl;
