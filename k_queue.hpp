@@ -24,7 +24,7 @@ private:
     size_t max_size;
     bool stop_flag;
 public:
-    k_queue(size_t max_size = std::numeric_limits<size_t>::max())
+    k_queue(size_t max_size = std::numeric_limits<size_t>::max()) noexcept
     {
         stop_flag = false;
         this->max_size = max_size;
@@ -32,6 +32,9 @@ public:
     k_queue(k_queue<T>&) = delete;
     k_queue operator= (k_queue<T>&) = delete;
 
+    /*
+     * Get an element from k_queue in milli, return nullptr if fail.
+     */
     std::shared_ptr<T> pop(milli_seconds milli = milli_seconds(0))
     {
         u_lock lk(mtx);
@@ -47,6 +50,10 @@ public:
         }
         return result;
     }
+
+    /*
+     * Get an element from k_queue, block util get an element or stop.
+     */
     std::shared_ptr<T> pop_block()
     {
         u_lock lk(mtx);
@@ -59,6 +66,10 @@ public:
             cv_not_full.notify_one();
         return result;
     }
+
+    /*
+     * Add an element to k_queue in milli, return false if time_out or stop.
+     */
     template<typename U>
     typename std::enable_if<
             std::is_same<T, /*typename is important*/typename std::remove_reference<U>::type>::value, bool
@@ -76,6 +87,10 @@ public:
         }
         else return false;
     }
+    
+    /*
+     * Stop k_queue, after call this function, both push and pop will not work any more.
+     */
     void stop()
     {
         {
@@ -85,19 +100,19 @@ public:
         cv_not_empty.notify_all();
         cv_not_full.notify_all();
     }
-    bool empty()
+    bool empty() noexcept
     {
         return que.empty();
     }
-    bool full()
+    bool full() noexcept
     {
         return que.size() == max_size;
     }
-    size_t size()
+    size_t size() noexcept
     {
         return que.size();
     }
-    ~k_queue()
+    ~k_queue() noexcept
     {
         stop();
     }
