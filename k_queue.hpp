@@ -24,7 +24,8 @@ private:
     size_t max_size;
     bool stop_flag;
 public:
-    k_queue(size_t max_size = std::numeric_limits<size_t>::max()) noexcept
+    k_queue(size_t max_size =
+        std::numeric_limits<size_t>::max()) noexcept
     {
         stop_flag = false;
         this->max_size = max_size;
@@ -37,9 +38,11 @@ public:
      */
     std::shared_ptr<T> pop(milli_seconds milli = milli_seconds(0))
     {
+        if(stop_flag) return std::shared_ptr<T>(nullptr);
         u_lock lk(mtx);
         auto result = std::shared_ptr<T>(nullptr);
-        if(cv_not_empty.wait_for(lk, milli, [&](){return stop_flag || !que.empty();}))
+        if(cv_not_empty.wait_for(lk, milli,
+            [&](){return stop_flag || !que.empty();}))
         {
             if(stop_flag) return result; // stop
             assert(!que.empty()); // DEBUG
@@ -56,6 +59,7 @@ public:
      */
     std::shared_ptr<T> pop_block()
     {
+        if(stop_flag) return std::shared_ptr<T>(nullptr);
         u_lock lk(mtx);
         cv_not_empty.wait(lk, [&](){return stop_flag || !que.empty();});
         if(stop_flag) return std::shared_ptr<T>(nullptr);
@@ -72,12 +76,17 @@ public:
      */
     template<typename U>
     typename std::enable_if<
-            std::is_same<T, /*typename is important*/typename std::remove_reference<U>::type>::value, bool
+            std::is_same<T,
+                /*typename is important*/
+                typename std::remove_reference<U>::type
+            >::value, bool
         >::type
     push(U&& t, milli_seconds milli = milli_seconds(0))
     {
+        if(stop_flag) return false;
         u_lock lk(mtx);
-        if(cv_not_full.wait_for(lk, milli, [&](){return stop_flag || que.size() != max_size;}))
+        if(cv_not_full.wait_for(lk, milli,
+            [&](){return stop_flag || que.size() != max_size;}))
         {
             if(stop_flag) return false;
             assert(que.size() != max_size);
@@ -89,12 +98,14 @@ public:
     }
     
     /*
-     * Stop k_queue, after call this function, both push and pop will not work any more.
+     * Stop k_queue, after call this function,
+     * both push and pop will not work any more.
      */
     void stop()
     {
         {
             u_lock lk(mtx);
+            if(stop_flag) return;
             stop_flag = true;
         }
         cv_not_empty.notify_all();
@@ -108,6 +119,11 @@ public:
     {
         return que.size() == max_size;
     }
+    void clear() noexcept
+    {
+        u_lock lk(mtx);
+        while(!que.empty()) que.pop();
+    }
     size_t size() noexcept
     {
         return que.size();
@@ -115,5 +131,6 @@ public:
     ~k_queue() noexcept
     {
         stop();
+        clear();
     }
 };
