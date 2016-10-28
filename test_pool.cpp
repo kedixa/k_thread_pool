@@ -11,11 +11,11 @@ void f(int x)
 }
 int main()
 {
-    k_thread_pool pool(2);
+    k_thread_pool pool(3);
     for(int i = 0; i < 10; ++i)
     {
         pool.add(f, i);
     }
-    cin.get();
+    pool.wait();
     return 0;
 }
