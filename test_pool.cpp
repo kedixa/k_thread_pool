@@ -1,6 +1,7 @@
 #include "k_thread_pool.hpp"
 #include <iostream>
 #include <sstream>
+#include <thread>
 using namespace std;
 
 void f(int x)
@@ -12,10 +13,16 @@ void f(int x)
 int main()
 {
     k_thread_pool pool(3);
-    for(int i = 0; i < 10; ++i)
-    {
-        pool.add(f, i);
-    }
+    thread th1 = thread([&](){
+        for(int i = 0; i < 10; i++)
+            pool.add(f, i);
+    });
+    thread th2 = thread([&](){
+        for(int i = 0; i < 10; i++)
+            pool.add(f, 30 - i);
+    });
+    th1.join();
+    th2.join();
     pool.wait();
     return 0;
 }
