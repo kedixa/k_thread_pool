@@ -2,17 +2,24 @@
     Author: kedixa
     E-mail: 1204837541@qq.com
     License: GPL2
+
+    class kedixa::queue<T>
+    Description:
+        A thread safe queue.
 */
 
 #include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 #include <type_traits>
 #include <chrono>
 #include <cassert>
 
+namespace kedixa
+{
 template<typename T>
-class k_queue
+class queue
 {
     using u_lock = std::unique_lock<std::mutex>;
     using milli_seconds = std::chrono::milliseconds;
@@ -22,19 +29,27 @@ private:
     std::condition_variable cv_not_full;
     std::condition_variable cv_not_empty;
     size_t max_size;
-    bool stop_flag;
+    //bool stop_flag;
+    std::atomic<bool> stop_flag;
 public:
-    k_queue(size_t max_size =
+    /*
+     * Construct a queue with size max_size, maximum for default.
+     */
+    queue(size_t max_size =
         std::numeric_limits<size_t>::max()) noexcept
     {
         stop_flag = false;
         this->max_size = max_size;
     }
-    k_queue(k_queue<T>&) = delete;
-    k_queue operator= (k_queue<T>&) = delete;
 
     /*
-     * Get an element from k_queue in milli, return nullptr if fail.
+     * This class cannot be copied.
+     */
+    queue(queue<T>&) = delete;
+    queue& operator= (queue<T>&) = delete;
+
+    /*
+     * Get an element from queue in milli, return nullptr if fail.
      */
     std::shared_ptr<T> pop(milli_seconds milli = milli_seconds(0))
     {
@@ -55,7 +70,7 @@ public:
     }
 
     /*
-     * Get an element from k_queue, block util get an element or stop.
+     * Get an element from queue, block util get an element or stop.
      */
     std::shared_ptr<T> pop_block()
     {
@@ -72,15 +87,13 @@ public:
     }
 
     /*
-     * Add an element to k_queue in milli, return false if time_out or stop.
+     * Add an element to queue in milli, return false if time_out or stop.
      */
     template<typename U>
-    typename std::enable_if<
-            std::is_same<T,
-                /*typename is important*/
-                typename std::remove_reference<U>::type
-            >::value, bool
-        >::type
+    typename std::enable_if<std::is_same<T,
+            /*typename is important*/
+            typename std::remove_reference<U>::type
+            >::value, bool>::type
     push(U&& t, milli_seconds milli = milli_seconds(0))
     {
         if(stop_flag) return false;
@@ -90,7 +103,7 @@ public:
         {
             if(stop_flag) return false;
             assert(que.size() != max_size);
-            que.push(std::forward<T>(t));
+            que.push(std::forward<U>(t));
             cv_not_empty.notify_one();
             return true;
         }
@@ -98,16 +111,13 @@ public:
     }
     
     /*
-     * Stop k_queue, after call this function,
+     * Stop queue, after call this function,
      * both push and pop will not work any more.
      */
     void stop()
     {
-        {
-            u_lock lk(mtx);
-            if(stop_flag) return;
-            stop_flag = true;
-        }
+        if(stop_flag) return;
+        stop_flag = true;
         cv_not_empty.notify_all();
         cv_not_full.notify_all();
     }
@@ -128,9 +138,11 @@ public:
     {
         return que.size();
     }
-    ~k_queue() noexcept
+    ~queue() noexcept
     {
         stop();
         clear();
     }
-};
+}; // class queue
+
+} // namespace
