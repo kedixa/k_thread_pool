@@ -14,7 +14,6 @@
 #include <atomic>
 #include <type_traits>
 #include <chrono>
-#include <cassert>
 
 namespace kedixa
 {
