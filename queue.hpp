@@ -29,7 +29,6 @@ private:
     std::condition_variable cv_not_full;
     std::condition_variable cv_not_empty;
     size_t max_size;
-    //bool stop_flag;
     std::atomic<bool> stop_flag;
 public:
     /*
@@ -56,11 +55,10 @@ public:
         if(stop_flag) return std::shared_ptr<T>(nullptr);
         u_lock lk(mtx);
         auto result = std::shared_ptr<T>(nullptr);
-        if(cv_not_empty.wait_for(lk, milli,
-            [&](){return stop_flag || !que.empty();}))
+        auto pred = [&](){return stop_flag || !que.empty();};
+        if(cv_not_empty.wait_for(lk, milli, pred))
         {
             if(stop_flag) return result; // stop
-            assert(!que.empty()); // DEBUG
             result = std::make_shared<T>(std::move(que.front()));
             que.pop();
             if(que.size() != max_size)
@@ -78,7 +76,6 @@ public:
         u_lock lk(mtx);
         cv_not_empty.wait(lk, [&](){return stop_flag || !que.empty();});
         if(stop_flag) return std::shared_ptr<T>(nullptr);
-        assert(!que.empty()); // DEBUG
         auto result = std::make_shared<T>(std::move(que.front()));
         que.pop();
         if(que.size() != max_size)
@@ -98,11 +95,10 @@ public:
     {
         if(stop_flag) return false;
         u_lock lk(mtx);
-        if(cv_not_full.wait_for(lk, milli,
-            [&](){return stop_flag || que.size() != max_size;}))
+        auto pred = [&](){return stop_flag || que.size() != max_size;};
+        if(cv_not_full.wait_for(lk, milli, pred))
         {
             if(stop_flag) return false;
-            assert(que.size() != max_size);
             que.push(std::forward<U>(t));
             cv_not_empty.notify_one();
             return true;
