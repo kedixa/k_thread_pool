@@ -1,43 +1,35 @@
 #include <thread>
 #include <iostream>
-#include "k_queue.hpp"
+#include "queue.hpp"
 using namespace std;
-class cc
-{
-    int a;
-    public:
-    cc(){}
-};
-k_queue<cc> que(3);
-const int sz = 10;
+using k_queue = kedixa::queue<int>;
+
+k_queue que(30);
+const int sz = 2000000;
 
 int main()
 {
-    thread t1 = thread([&](){
+    using chrono::system_clock;
+    auto start = system_clock::now();
+    thread t1 = thread([](){
         for(int i = 0; i < sz; i++)
         {
-            auto t = que.pop(chrono::milliseconds(0));
-            if(t) cout<<"thread 1 pop: "<<endl;
-            else 
+            decltype(que.pop()) t;
+            do
             {
-                cout<<"wait"<<endl;
-                --i;
-            }
+                t = que.pop();
+            } while(!t);
         }
     });
-    thread t2 = thread([&](){
+    thread t2 = thread([](){
         for(int i = 0; i < sz; i++)
-        {
-            auto f=que.push(cc());
-            if(f)cout<<"thread 2 push"<<endl;
-            else
-            {
-                cout<<"wait 2"<<endl;
-                --i;
-            }
-        }
+            while(!que.push(i));
     });
     t1.join();
     t2.join();
+    auto end = system_clock::now();
+    auto seconds = chrono::duration_cast<chrono::seconds>(end - start);
+    cout << seconds.count() << " seconds used for push and pop " <<
+        sz << " integers." <<endl;
     return 0;
 }
