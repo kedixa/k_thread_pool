@@ -29,6 +29,7 @@ private:
     std::condition_variable cv_not_empty;
     size_t max_size;
     std::atomic<bool> stop_flag;
+    std::atomic<bool> wait_flag;
 public:
     /*
      * Construct a queue with size max_size, maximum for default.
@@ -37,6 +38,7 @@ public:
         std::numeric_limits<size_t>::max()) noexcept
     {
         stop_flag = false;
+        wait_flag = false;
         this->max_size = max_size;
     }
 
@@ -54,10 +56,11 @@ public:
         if(stop_flag) return std::shared_ptr<T>(nullptr);
         u_lock lk(mtx);
         auto result = std::shared_ptr<T>(nullptr);
-        auto pred = [&](){return stop_flag || !que.empty();};
+        auto pred = [&](){return stop_flag || wait_flag || !que.empty();};
         if(cv_not_empty.wait_for(lk, milli, pred))
         {
-            if(stop_flag) return result; // stop
+            // stop() && wait() can wake here up.
+            if(stop_flag || que.empty()) return result; // stop
             result = std::make_shared<T>(std::move(que.front()));
             que.pop();
             if(que.size() != max_size)
@@ -73,8 +76,10 @@ public:
     {
         if(stop_flag) return std::shared_ptr<T>(nullptr);
         u_lock lk(mtx);
-        cv_not_empty.wait(lk, [&](){return stop_flag || !que.empty();});
-        if(stop_flag) return std::shared_ptr<T>(nullptr);
+        cv_not_empty.wait(lk, [&](){
+            return stop_flag || wait_flag || !que.empty();});
+        // stop() && wait() can wake here up.
+        if(stop_flag || que.empty()) return std::shared_ptr<T>(nullptr);
         auto result = std::make_shared<T>(std::move(que.front()));
         que.pop();
         if(que.size() != max_size)
@@ -92,12 +97,13 @@ public:
             >::value, bool>::type
     push(U&& t, milli_seconds milli = milli_seconds(0))
     {
-        if(stop_flag) return false;
+        if(stop_flag || wait_flag) return false;
         u_lock lk(mtx);
-        auto pred = [&](){return stop_flag || que.size() != max_size;};
+        auto pred = [&](){
+            return stop_flag || wait_flag || que.size() != max_size;};
         if(cv_not_full.wait_for(lk, milli, pred))
         {
-            if(stop_flag) return false;
+            if(stop_flag || wait_flag) return false;
             que.push(std::forward<U>(t));
             cv_not_empty.notify_one();
             return true;
@@ -116,6 +122,16 @@ public:
         cv_not_empty.notify_all();
         cv_not_full.notify_all();
     }
+
+    /*
+     * Disable push function, if pop are blocked, wake them up.
+     */
+    void wait()
+    {
+        if(wait_flag) return;
+        wait_flag = true;
+        cv_not_empty.notify_all();
+    }
     bool empty() noexcept
     {
         return que.empty();
@@ -124,9 +140,13 @@ public:
     {
         return que.size() == max_size;
     }
+
+    /*
+     * Release the space, but you cannot use this queue any more.
+     */
     void clear() noexcept
     {
-        u_lock lk(mtx);
+        stop();
         while(!que.empty()) que.pop();
     }
     size_t size() noexcept
@@ -135,7 +155,6 @@ public:
     }
     ~queue() noexcept
     {
-        stop();
         clear();
     }
 }; // class queue
