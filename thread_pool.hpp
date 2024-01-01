@@ -10,19 +10,27 @@
 
 #include <thread>
 #include <chrono>
+#include <functional>
 #include "queue.hpp"
 
 namespace kedixa
 {
+
 class thread_pool
 {
+    static bool &get_flag()
+    {
+        static bool flag = false;
+        return flag;
+    }
 private:
     size_t thread_num; // the number of threads.
     bool stop_running;
     bool stop_add;
     queue<std::function<void()>> task_que;
-    std::vector<std::shared_ptr<std::thread>> threads;
+    std::vector<std::thread> threads;
     std::once_flag one_flag; // join_all_threads can only call once.
+    std::vector<std::thread::id> vec_tids;
     
     /*
      * Add std::function<void()> to task_que,
@@ -43,6 +51,9 @@ private:
         {
             auto task = task_que.pop_block();
             if(task) (*task)();
+
+            if (get_flag())
+                break;
         }
     }
 
@@ -51,8 +62,12 @@ private:
      */
     void join_all_threads() noexcept
     {
+        auto tid = std::this_thread::get_id();
         for(auto &t : threads)
-            if(t) t->join();
+        {
+            if(t.get_id() != tid) t.join();
+            else t.detach();
+        }
         threads.clear();
     }
 public:
@@ -62,9 +77,13 @@ public:
         stop_running = false;
         stop_add = false;
         this->thread_num = thread_num;
+        threads.reserve(this->thread_num);
+
         for(size_t i = 0; i < this->thread_num; ++i)
-            threads.push_back(std::make_shared<std::thread>(
-                &thread_pool::run, this));
+        {
+            threads.emplace_back(std::thread(&thread_pool::run, this));
+            vec_tids.push_back(threads.back().get_id());
+        }
     }
 
     /*
@@ -111,6 +130,7 @@ public:
 
     ~thread_pool() noexcept
     {
+        get_flag() = true;
         stop();
     }
 };

@@ -6,7 +6,7 @@
 #include <cassert>
 using namespace std;
 using kedixa::thread_pool;
-const int sz = 1000000;
+const int sz = 100000;
 
 void func(int x)
 {
@@ -48,6 +48,7 @@ void test_wait_stop()
     pool2.stop();
     cout << endl;
 }
+
 void vf(){}
 void test_functions()
 {
@@ -95,12 +96,23 @@ void test_efficiency()
         " empty functions.\n";
     cout << endl;
 }
+
+void test_destroy()
+{
+    thread_pool *pool1 = new thread_pool();
+    cout << "add destroy function" << endl;
+    // you can stop but not wait for yourself
+    pool1->add([pool1] { pool1->stop(); delete pool1; });
+    cout << "after add destroy function" << endl;
+}
+
 int main()
 {
     test_work();
     test_wait_stop();
     test_functions();
     test_ref();
+    test_destroy();
     test_efficiency();
     return 0;
 }
