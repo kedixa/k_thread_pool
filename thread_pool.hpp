@@ -20,7 +20,7 @@ class thread_pool
 {
     static bool &get_flag()
     {
-        static bool flag = false;
+        static thread_local bool flag = false;
         return flag;
     }
 private:
